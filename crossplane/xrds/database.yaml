@@ -1,0 +1,45 @@
+# DRAFT — encodes ADR-016; not yet exercised.
+# Developer-facing Database API. Identical on every cluster; the backend is chosen by the cluster overlay,
+# which patches defaultCompositionRef (database-cnpg on local, database-azure on azure).
+# Crossplane v2: namespaced XR, no claims; connection details are a composed Secret named <name>-conn.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: databases.platform.warden.dev
+spec:
+  scope: Namespaced
+  group: platform.warden.dev
+  names:
+    kind: Database
+    plural: databases
+  defaultCompositionRef:
+    name: database-cnpg
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  type: string
+                  description: small = 1 instance / 1 GiB storage locally, B1ms in Azure; medium = 2 instances / 5 GiB
+                  enum: [small, medium]
+                  default: small
+                version:
+                  type: string
+                  description: PostgreSQL major version
+                  enum: ["16", "17"]
+                  default: "17"
+            status:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                connectionSecret:
+                  type: string
+                  description: Name of the Secret in this namespace holding host, port, dbname, username, password, uri

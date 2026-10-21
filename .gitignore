@@ -1,0 +1,14 @@
+# OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+*.auto.tfvars
+# Ledger timing markers
+.ledger-*.start
+# Local secrets
+.env
+*.pem
+kubeconfig*
+__pycache__/
