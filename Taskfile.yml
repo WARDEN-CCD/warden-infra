@@ -1,0 +1,42 @@
+# DRAFT — local tasks not yet run end to end; azure tasks are stubs until the tofu modules exist (weeks 4–6).
+version: '3'
+
+vars:
+  CLUSTER: warden
+  ARGOCD_CHART_VERSION: 10.10.5   # keep equal to versions.yaml charts.argo-cd.version
+  GITOPS: ../warden-gitops
+
+tasks:
+  up:local:
+    desc: Create the kind cluster, install Argo CD, apply the local root app; append to the rebuild ledger
+    cmds:
+      - python scripts/ledger.py start local
+      - defer: python scripts/ledger.py finish local {{.EXIT_CODE | default "0"}}
+      - kind create cluster --config kind/warden.yaml --wait 180s
+      - >-
+        helm upgrade --install argocd argo-cd
+        --repo https://argoproj.github.io/argo-helm --version {{.ARGOCD_CHART_VERSION}}
+        --namespace argocd --create-namespace --wait
+      - kubectl apply -f {{.GITOPS}}/bootstrap/root-local.yaml
+      - kubectl -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=900s
+
+  down:local:
+    desc: Delete the kind cluster
+    cmds:
+      - kind delete cluster --name {{.CLUSTER}}
+
+  rebuild:local:
+    desc: Destroy and recreate the local environment (timed)
+    cmds:
+      - task: down:local
+      - task: up:local
+
+  up:azure:
+    desc: (stub) tofu apply envs/azure, then the same GitOps bootstrap with root-azure.yaml
+    cmds:
+      - echo "Not implemented yet — weeks 4-6 (ROADMAP.md)" && exit 1
+
+  down:azure:
+    desc: (stub) tofu destroy envs/azure
+    cmds:
+      - echo "Not implemented yet — weeks 4-6 (ROADMAP.md)" && exit 1
