@@ -24,6 +24,11 @@ tasks:
       # root + 9 platform charts + 6 config apps
       - python scripts/wait_for_apps.py --min-apps 16 --timeout 1800
 
+  measure:
+    desc: Median memory/CPU per component on the current cluster (spike S2)
+    cmds:
+      - python scripts/measure_memory.py {{.CLI_ARGS}}
+
   down:local:
     desc: Delete the kind cluster
     cmds:
