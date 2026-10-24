@@ -2,7 +2,7 @@
 # Developer-facing Database API. Identical on every cluster; the backend is chosen by the cluster overlay,
 # which patches defaultCompositionRef (database-cnpg on local, database-azure on azure).
 # Crossplane v2: namespaced XR, no claims. status.connectionSecret names the Secret with host, port, dbname,
-# username, password and uri (CNPG: <name>-app).
+# username, password and uri: always <name>-conn, whatever the backend.
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
@@ -43,4 +43,4 @@ spec:
                   type: string
                 connectionSecret:
                   type: string
-                  description: Secret in this namespace with host, port, dbname, username, password, uri
+                  description: Secret <name>-conn in this namespace with host, port, dbname, username, password, uri
