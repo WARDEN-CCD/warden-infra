@@ -45,6 +45,8 @@ provider "azurerm" {
 
 provider "azuread" {}
 
+data "azurerm_client_config" "current" {}
+
 resource "azurerm_resource_group" "warden" {
   name     = "warden"
   location = var.location
@@ -56,14 +58,17 @@ locals {
 }
 
 module "aks" {
-  source              = "../../modules/aks"
-  name                = "warden"
-  location            = azurerm_resource_group.warden.location
-  resource_group_name = azurerm_resource_group.warden.name
-  kubernetes_version  = var.kubernetes_version
-  node_size           = var.node_size
-  node_count          = var.node_count
-  tags                = local.tags
+  source               = "../../modules/aks"
+  name                 = "warden"
+  location             = azurerm_resource_group.warden.location
+  resource_group_name  = azurerm_resource_group.warden.name
+  kubernetes_version   = var.kubernetes_version
+  node_size            = var.node_size
+  node_count           = var.node_count
+  tenant_id            = data.azurerm_client_config.current.tenant_id
+  admin_object_ids     = concat([data.azurerm_client_config.current.object_id], var.extra_admin_object_ids)
+  api_authorized_cidrs = var.operator_cidrs
+  tags                 = local.tags
 }
 
 module "budget" {
