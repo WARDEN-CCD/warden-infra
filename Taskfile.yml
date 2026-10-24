@@ -21,8 +21,8 @@ tasks:
         --namespace argocd --create-namespace
         -f {{.GITOPS}}/platform/argocd/values.yaml --wait --timeout 10m
       - kubectl apply -f {{.GITOPS}}/bootstrap/root-local.yaml
-      # root + 9 platform charts + 6 config apps
-      - python scripts/wait_for_apps.py --min-apps 16 --timeout 1800
+      # root + 9 platform charts + 7 config apps (+ one per service in apps/)
+      - python scripts/wait_for_apps.py --min-apps 17 --timeout 1800
 
   measure:
     desc: Median memory/CPU per component on the current cluster (spike S2)
