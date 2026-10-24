@@ -13,6 +13,7 @@ tasks:
       - python scripts/ledger.py start local
       - defer: python scripts/ledger.py finish local {{.EXIT_CODE | default "0"}}
       - kind create cluster --config kind/warden.yaml --wait 180s
+      - python scripts/bootstrap_secrets.py local
       # Same release name and values Argo CD later uses to manage itself (warden-gitops platform ApplicationSet).
       - >-
         helm upgrade --install argocd argo-cd
@@ -20,8 +21,8 @@ tasks:
         --namespace argocd --create-namespace
         -f {{.GITOPS}}/platform/argocd/values.yaml --wait --timeout 10m
       - kubectl apply -f {{.GITOPS}}/bootstrap/root-local.yaml
-      # root + 9 platform charts + 5 config apps
-      - python scripts/wait_for_apps.py --min-apps 15 --timeout 1800
+      # root + 9 platform charts + 6 config apps
+      - python scripts/wait_for_apps.py --min-apps 16 --timeout 1800
 
   down:local:
     desc: Delete the kind cluster
