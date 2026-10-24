@@ -1,10 +1,15 @@
-# DRAFT — local tasks not yet run end to end; azure tasks are stubs until the tofu modules exist (weeks 4–6).
+# DRAFT — local tasks run end to end on kind (S2, E1–E4); azure tasks are written but not yet run on AKS.
 version: '3'
+
+# Machine settings, never committed (hub CONTRIBUTING "Local setup"). Azure tasks read TF_VAR_state_passphrase,
+# TF_VAR_subscription_id and TF_VAR_contact_emails from here.
+dotenv: ['{{.USERPROFILE}}/.warden/env', '{{.HOME}}/.warden/env']
 
 vars:
   CLUSTER: warden
   ARGOCD_CHART_VERSION: 10.10.5   # keep equal to versions.yaml charts.argo-cd.version
   GITOPS: ../warden-gitops
+  WARDEN_DIR: '{{.USERPROFILE | default .HOME}}/.warden'
 
 tasks:
   up:local:
@@ -40,12 +45,64 @@ tasks:
       - task: down:local
       - task: up:local
 
-  up:azure:
-    desc: (stub) tofu apply envs/azure, then the same GitOps bootstrap with root-azure.yaml
+  bootstrap:azure:
+    desc: One-time per subscription - create the state storage account and write ~/.warden/backend.hcl
+    dir: tofu/bootstrap
+    preconditions:
+      - sh: az account show -o none
+        msg: "Run az login first."
+      - sh: test -n "$TF_VAR_subscription_id"
+        msg: "Set TF_VAR_subscription_id in ~/.warden/env."
     cmds:
-      - echo "Not implemented yet — weeks 4-6 (ROADMAP.md)" && exit 1
+      - tofu init -input=false
+      - tofu apply -input=false
+      - >-
+        tofu output -json backend_config
+        | python -c "import json,sys; [print(f'{k} = {json.dumps(v)}') for k, v in json.load(sys.stdin).items()]"
+        > "{{.WARDEN_DIR}}/backend.hcl"
+      - echo "wrote {{.WARDEN_DIR}}/backend.hcl"
+
+  up:azure:
+    desc: Create AKS with OpenTofu, install Argo CD, apply the azure root app; append to the rebuild ledger
+    vars: &azure_vars
+      # The API server only answers this address (modules/aks). Override with OPERATOR_CIDR=a.b.c.d/32.
+      OPERATOR_CIDR:
+        sh: echo "${OPERATOR_CIDR:-$(curl -fsS https://api.ipify.org)/32}"
+      BUDGET_START: '{{dateInZone "2006-01" now "UTC"}}-01T00:00:00Z'
+      TOFU_VARS: >-
+        -var 'operator_cidrs=["{{.OPERATOR_CIDR}}"]'
+        -var 'budget_start_date={{.BUDGET_START}}'
+    preconditions: &azure_preconditions
+      - sh: az account show -o none
+        msg: "Run az login first."
+      - sh: test -n "$TF_VAR_state_passphrase" && test -n "$TF_VAR_subscription_id" && test -n "$TF_VAR_contact_emails"
+        msg: "Set TF_VAR_state_passphrase, TF_VAR_subscription_id and TF_VAR_contact_emails in ~/.warden/env."
+      - sh: test -f "{{.WARDEN_DIR}}/backend.hcl"
+        msg: "Run task bootstrap:azure once first."
+    cmds:
+      - python scripts/ledger.py start azure
+      - defer: python scripts/ledger.py finish azure {{.EXIT_CODE | default "0"}}
+      - tofu -chdir=tofu/envs/azure init -input=false -backend-config="{{.WARDEN_DIR}}/backend.hcl"
+      - tofu -chdir=tofu/envs/azure apply -input=false -auto-approve {{.TOFU_VARS}}
+      # Local accounts are disabled: the kubeconfig carries an Entra exec plugin, never a static credential.
+      - az aks get-credentials -g warden -n warden --overwrite-existing
+      - kubelogin convert-kubeconfig -l azurecli
+      - python scripts/bootstrap_secrets.py azure
+      - >-
+        helm upgrade --install argocd argo-cd
+        --repo https://argoproj.github.io/argo-helm --version {{.ARGOCD_CHART_VERSION}}
+        --namespace argocd --create-namespace
+        -f {{.GITOPS}}/platform/argocd/values.yaml --wait --timeout 10m
+      - kubectl apply -f {{.GITOPS}}/bootstrap/root-azure.yaml
+      # root + 8 platform charts (AKS ships metrics-server) + 7 config apps (+ one per service in apps/)
+      - python scripts/wait_for_apps.py --min-apps 16 --timeout 2400
 
   down:azure:
-    desc: (stub) tofu destroy envs/azure
+    desc: Destroy everything in envs/azure (cluster, resource group, budget, CI identity); state storage stays
+    vars: *azure_vars
+    preconditions: *azure_preconditions
     cmds:
-      - echo "Not implemented yet — weeks 4-6 (ROADMAP.md)" && exit 1
+      - tofu -chdir=tofu/envs/azure init -input=false -backend-config="{{.WARDEN_DIR}}/backend.hcl"
+      - tofu -chdir=tofu/envs/azure destroy -input=false -auto-approve {{.TOFU_VARS}}
+      - kubectl config delete-context warden || true
+      - echo "Check nothing is left billing - az group list --query \"[?starts_with(name, 'warden')].name\""
