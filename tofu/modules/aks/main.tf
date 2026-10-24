@@ -21,6 +21,20 @@ resource "azurerm_kubernetes_cluster" "this" {
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
 
+  # Entra ID only: no static admin certificate exists, and Kubernetes authorization is Azure RBAC, so access is
+  # a role assignment that disappears with the cluster. Operators connect with az + kubelogin.
+  local_account_disabled = true
+  azure_active_directory_role_based_access_control {
+    azure_rbac_enabled = true
+    tenant_id          = var.tenant_id
+  }
+
+  # The API server answers only the operators' addresses (AKS adds the cluster's own egress IP). CI never
+  # talks to the cluster (T09); Argo CD pulls from inside it.
+  api_server_access_profile {
+    authorized_ip_ranges = var.api_authorized_cidrs
+  }
+
   default_node_pool {
     name                        = "system"
     vm_size                     = var.node_size
@@ -48,4 +62,11 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   tags = var.tags
+}
+
+resource "azurerm_role_assignment" "cluster_admin" {
+  for_each             = toset(var.admin_object_ids)
+  scope                = azurerm_kubernetes_cluster.this.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = each.value
 }

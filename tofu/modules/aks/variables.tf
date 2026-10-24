@@ -32,6 +32,31 @@ variable "node_count" {
   }
 }
 
+variable "tenant_id" {
+  type        = string
+  description = "Entra tenant for the cluster's Azure RBAC integration."
+}
+
+variable "admin_object_ids" {
+  type        = list(string)
+  description = "Entra object IDs given Azure Kubernetes Service RBAC Cluster Admin on this cluster only."
+
+  validation {
+    condition     = length(var.admin_object_ids) > 0
+    error_message = "With local accounts disabled, at least one admin is needed or nobody can reach the cluster."
+  }
+}
+
+variable "api_authorized_cidrs" {
+  type        = list(string)
+  description = "Addresses allowed to reach the API server (operators' public IPs as /32)."
+
+  validation {
+    condition     = length(var.api_authorized_cidrs) > 0 && !contains(var.api_authorized_cidrs, "0.0.0.0/0")
+    error_message = "List the operators' addresses; an empty list or 0.0.0.0/0 leaves the API server open."
+  }
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

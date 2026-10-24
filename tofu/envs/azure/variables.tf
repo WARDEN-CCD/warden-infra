@@ -38,6 +38,17 @@ variable "node_count" {
   default = 2
 }
 
+variable "operator_cidrs" {
+  type        = list(string)
+  description = "Public addresses allowed to reach the API server; task up:azure passes the operator's IP as /32."
+}
+
+variable "extra_admin_object_ids" {
+  type        = list(string)
+  default     = []
+  description = "Teammates' Entra object IDs, in addition to whoever runs tofu apply."
+}
+
 variable "budget_usd" {
   type    = number
   default = 100
