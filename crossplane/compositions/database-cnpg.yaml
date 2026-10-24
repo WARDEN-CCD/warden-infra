@@ -1,0 +1,64 @@
+# Database -> CloudNativePG Cluster in the XR's own namespace (ADR-016). Default composition on kind.
+# PostgreSQL images are pinned by digest (CLAUDE.md rule 1); the admission VAP allows exactly this registry path
+# for CNPG-managed pods (warden-policy, THREAT_MODEL T06 carve-out).
+# Connection details: CNPG writes Secret <name>-app (host, port, dbname, username, password, uri); its name is
+# published in the XR's status.connectionSecret.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: database-cnpg
+  labels:
+    warden.dev/backend: cnpg
+spec:
+  compositeTypeRef:
+    apiVersion: platform.warden.dev/v1alpha1
+    kind: Database
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $name := $xr.metadata.name }}
+            {{- $size := $xr.spec.size | default "small" }}
+            {{- $version := $xr.spec.version | default "18" }}
+            {{- $images := dict
+                  "17" "ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie@sha256:ae22bdd6008e02c18180c84192b3afbc95a758a184899f1cb7e85ed9c3ef8128"
+                  "18" "ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie@sha256:f7e00138159bb45d70b624ba25e446924cb3ed1bf366d13e936c3f81b914064e" }}
+            ---
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: cluster
+            spec:
+              instances: {{ if eq $size "medium" }}2{{ else }}1{{ end }}
+              imageName: {{ get $images $version }}
+              storage:
+                size: {{ if eq $size "medium" }}5Gi{{ else }}1Gi{{ end }}
+              bootstrap:
+                initdb:
+                  database: app
+                  owner: app
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi
+            ---
+            apiVersion: platform.warden.dev/v1alpha1
+            kind: Database
+            status:
+              endpoint: {{ $name }}-rw.{{ $xr.metadata.namespace }}.svc
+              connectionSecret: {{ $name }}-app
+    - step: automatically-detect-readiness
+      functionRef:
+        name: function-auto-ready

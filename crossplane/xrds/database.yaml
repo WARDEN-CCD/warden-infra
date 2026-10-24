@@ -1,7 +1,8 @@
-# DRAFT — encodes ADR-016; not yet exercised.
+# Encodes ADR-016. Exercised on kind with the database-cnpg composition (2026-10-24).
 # Developer-facing Database API. Identical on every cluster; the backend is chosen by the cluster overlay,
 # which patches defaultCompositionRef (database-cnpg on local, database-azure on azure).
-# Crossplane v2: namespaced XR, no claims; connection details are a composed Secret named <name>-conn.
+# Crossplane v2: namespaced XR, no claims. status.connectionSecret names the Secret with host, port, dbname,
+# username, password and uri (CNPG: <name>-app).
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
@@ -33,8 +34,8 @@ spec:
                 version:
                   type: string
                   description: PostgreSQL major version
-                  enum: ["16", "17"]
-                  default: "17"
+                  enum: ["17", "18"]
+                  default: "18"                  # CloudNativePG 1.30's default major
             status:
               type: object
               properties:
@@ -42,4 +43,4 @@ spec:
                   type: string
                 connectionSecret:
                   type: string
-                  description: Name of the Secret in this namespace holding host, port, dbname, username, password, uri
+                  description: Secret in this namespace with host, port, dbname, username, password, uri
