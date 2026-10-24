@@ -50,7 +50,8 @@ def main() -> int:
         bad = [r for r in rows if r[1] != "Synced" or r[2] != "Healthy"]
         summary = f"{len(rows) - len(bad)}/{len(rows)} apps Synced+Healthy"
         if summary != last:
-            print(f"[{time.strftime('%H:%M:%S')}] {summary}" + (f"; waiting on {', '.join(r[0] for r in bad)}" if bad else ""))
+            print(f"[{time.strftime('%H:%M:%S')}] {summary}" + (f"; waiting on {', '.join(r[0] for r in bad)}" if bad else ""),
+                  flush=True)
             last = summary
         good_polls = good_polls + 1 if rows and not bad and len(rows) >= args.min_apps else 0
         if good_polls >= 2:
