@@ -55,7 +55,7 @@ tasks:
         msg: "Set TF_VAR_subscription_id in ~/.warden/env."
     cmds:
       - tofu init -input=false
-      - tofu apply -input=false
+      - tofu apply -input=false {{.CLI_ARGS}}   # e.g. task bootstrap:azure -- -auto-approve
       - >-
         tofu output -json backend_config
         | python -c "import json,sys; [print(f'{k} = {json.dumps(v)}') for k, v in json.load(sys.stdin).items()]"
