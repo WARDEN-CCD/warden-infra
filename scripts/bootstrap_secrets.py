@@ -7,7 +7,8 @@
   so a human can log in; nothing is printed. Idempotent: an existing Secret is kept.
 - Secret argocd/argocd-notifications-secret for the DORA ledger (ADR-019), when `warden setup-apps` has created
   the warden-ccd-deployments GitHub App: its private key (~/.warden/warden-ccd-deployments.pem) and the
-  WARDEN_DEPLOYMENTS_APP_ID / _INSTALLATION_ID it wrote to ~/.warden/env. Skipped, not failed, without them.
+  WARDEN_DEPLOYMENTS_APP_ID / _INSTALLATION_ID it wrote to ~/.warden/env. Skipped, not failed, without them,
+  and only for the cluster named by WARDEN_LEDGER_CLUSTER (default `local`), so two clusters never share the ledger.
 Stdlib only. Secrets are sent on stdin, never as a command-line argument.
 """
 
@@ -68,7 +69,14 @@ def warden_env() -> dict[str, str]:
     return values
 
 
-def notifications_secret() -> bool:
+def notifications_secret(cluster: str) -> bool:
+    # One cluster writes the DORA ledger at a time: Application names (svc-<name>) are the Deployment
+    # environments, so a second cluster running the same apps would record its deployments as the same services.
+    ledger = os.environ.get("WARDEN_LEDGER_CLUSTER", "local")
+    if cluster != ledger:
+        print(f"bootstrap_secrets: cluster {cluster!r} does not write the DORA ledger (it is {ledger!r}); "
+              "notifications stay off")
+        return True
     key = WARDEN / "warden-ccd-deployments.pem"
     env = warden_env()
     app_id, installation_id = env.get("WARDEN_DEPLOYMENTS_APP_ID"), env.get("WARDEN_DEPLOYMENTS_INSTALLATION_ID")
@@ -89,7 +97,7 @@ def notifications_secret() -> bool:
 def main() -> int:
     cluster = sys.argv[1] if len(sys.argv) > 1 else "local"
     ok = grafana_admin(cluster)
-    ok = notifications_secret() and ok
+    ok = notifications_secret(cluster) and ok
     return 0 if ok else 1
 
 
