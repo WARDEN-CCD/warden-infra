@@ -79,7 +79,7 @@ tasks:
     preconditions: &azure_preconditions
       - sh: az account show -o none
         msg: "Run az login first."
-      - sh: test -n "$TF_VAR_state_passphrase" && test -n "$TF_VAR_subscription_id" && test -n "$TF_VAR_contact_emails" && test -n "$TF_VAR_crossplane_object_id" && test -n "$WARDEN_CROSSPLANE_CLIENT_ID" && test -n "$WARDEN_CROSSPLANE_CLIENT_SECRET" && test -n "$WARDEN_CROSSPLANE_TENANT_ID"
+      - sh: test -n "$TF_VAR_state_passphrase" && test -n "$TF_VAR_subscription_id" && test -n "$TF_VAR_contact_emails" && test -n "$TF_VAR_crossplane_object_id" && test -n "$WARDEN_CROSSPLANE_CLIENT_ID" && test -n "$WARDEN_CROSSPLANE_CLIENT_SECRET_B64" && test -n "$WARDEN_CROSSPLANE_TENANT_ID"
         msg: "Set Azure state, budget and Crossplane identity values in ~/.warden/env (run task bootstrap:crossplane-identity first)."
       - sh: test -f "{{.WARDEN_DIR}}/backend.hcl"
         msg: "Run task bootstrap:azure once first."

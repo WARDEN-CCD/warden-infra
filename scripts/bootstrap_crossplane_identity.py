@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -26,13 +27,14 @@ def main() -> int:
                 key, _, value = line.partition("=")
                 existing[key.strip()] = value.strip()
 
-    needed = ("WARDEN_CROSSPLANE_CLIENT_ID", "WARDEN_CROSSPLANE_CLIENT_SECRET",
+    needed = ("WARDEN_CROSSPLANE_CLIENT_ID", "WARDEN_CROSSPLANE_CLIENT_SECRET_B64",
               "WARDEN_CROSSPLANE_TENANT_ID", "TF_VAR_crossplane_object_id")
     if all(existing.get(key) for key in needed):
         print("bootstrap_crossplane_identity: credentials already exist in ~/.warden/env; kept")
         return 0
 
     account = run("account", "show", "--output", "json")
+    subscription_id = existing.get("TF_VAR_subscription_id", account["id"])
     app = run("ad", "sp", "create-for-rbac", "--name", "warden-crossplane-postgresql",
               "--skip-assignment", "--years", "1", "--output", "json")
     if not all(app.get(key) for key in ("appId", "password", "tenant")):
@@ -40,10 +42,10 @@ def main() -> int:
     principal = run("ad", "sp", "show", "--id", app["appId"], "--output", "json")
     values = {
         "WARDEN_CROSSPLANE_CLIENT_ID": app["appId"],
-        "WARDEN_CROSSPLANE_CLIENT_SECRET": app["password"],
+        "WARDEN_CROSSPLANE_CLIENT_SECRET_B64": base64.urlsafe_b64encode(app["password"].encode()).decode(),
         "WARDEN_CROSSPLANE_TENANT_ID": app["tenant"],
         "TF_VAR_crossplane_object_id": principal["id"],
-        "TF_VAR_subscription_id": account["id"],
+        "TF_VAR_subscription_id": subscription_id,
     }
     existing.update(values)
     WARDEN.mkdir(parents=True, exist_ok=True)

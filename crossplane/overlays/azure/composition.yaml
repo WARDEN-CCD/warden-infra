@@ -65,7 +65,6 @@ spec:
                   name: {{ $name }}-conn
                   namespace: {{ $namespace }}
                   key: password
-                autoGeneratePassword: true
                 backupRetentionDays: 7
                 location: indiasouthcentral
                 publicNetworkAccessEnabled: true
