@@ -1,4 +1,4 @@
-# DRAFT — local tasks run end to end on kind (S2, E1–E4); azure tasks are written but not yet run on AKS.
+# Local tasks run end to end on kind (S2, E1–E8); the azure tasks have created and destroyed AKS (see the hub's evidence/azure).
 version: '3'
 
 # Machine settings, never committed (hub CONTRIBUTING "Local setup"). Azure tasks read TF_VAR_state_passphrase,
