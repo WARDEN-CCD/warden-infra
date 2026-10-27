@@ -55,7 +55,6 @@ resource "azurerm_resource_group" "warden" {
 
 # Crossplane can manage only Flexible Server resources inside the ephemeral Warden resource group.
 resource "azurerm_role_definition" "crossplane_postgresql" {
-  count       = var.crossplane_object_id == null ? 0 : 1
   name        = "warden-crossplane-postgresql-${substr(var.subscription_id, -8, 8)}"
   scope       = "/subscriptions/${var.subscription_id}"
   description = "Manage Azure Database for PostgreSQL Flexible Server resources in the Warden resource group."
@@ -80,7 +79,6 @@ resource "azurerm_role_definition" "crossplane_postgresql" {
 }
 
 resource "azurerm_role_definition" "crossplane_postgresql_capabilities" {
-  count       = var.crossplane_object_id == null ? 0 : 1
   name        = "warden-crossplane-postgresql-capabilities-${substr(var.subscription_id, -8, 8)}"
   scope       = "/subscriptions/${var.subscription_id}"
   description = "Read Azure PostgreSQL location capabilities required by the Warden Crossplane provider."
@@ -94,19 +92,17 @@ resource "azurerm_role_definition" "crossplane_postgresql_capabilities" {
 }
 
 resource "azurerm_role_assignment" "crossplane_postgresql" {
-  count                            = var.crossplane_object_id == null ? 0 : 1
   scope                            = azurerm_resource_group.warden.id
-  role_definition_id               = azurerm_role_definition.crossplane_postgresql[0].role_definition_resource_id
-  principal_id                     = var.crossplane_object_id
+  role_definition_id               = azurerm_role_definition.crossplane_postgresql.role_definition_resource_id
+  principal_id                     = module.aks.kubelet_identity_object_id
   principal_type                   = "ServicePrincipal"
   skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "crossplane_postgresql_capabilities" {
-  count                            = var.crossplane_object_id == null ? 0 : 1
   scope                            = "/subscriptions/${var.subscription_id}"
-  role_definition_id               = azurerm_role_definition.crossplane_postgresql_capabilities[0].role_definition_resource_id
-  principal_id                     = var.crossplane_object_id
+  role_definition_id               = azurerm_role_definition.crossplane_postgresql_capabilities.role_definition_resource_id
+  principal_id                     = module.aks.kubelet_identity_object_id
   principal_type                   = "ServicePrincipal"
   skip_service_principal_aad_check = true
 }

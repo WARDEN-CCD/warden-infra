@@ -1,4 +1,5 @@
 # Azure Flexible Server provider packages are installed only on AKS. Versions are pinned in the hub's versions.yaml.
+# ProviderConfig is bootstrap-generated from the Azure account because subscription and tenant IDs vary by team.
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
@@ -13,14 +14,3 @@ metadata:
 spec:
   package: xpkg.crossplane.io/crossplane-contrib/provider-azure-dbforpostgresql:v2.8.0
 ---
-apiVersion: azure.upbound.io/v1beta1
-kind: ProviderConfig
-metadata:
-  name: default
-spec:
-  credentials:
-    source: Secret
-    secretRef:
-      name: azure-creds
-      namespace: crossplane-system
-      key: creds

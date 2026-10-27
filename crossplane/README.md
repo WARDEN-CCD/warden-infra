@@ -8,7 +8,7 @@ Crossplane v2.4 installs from `warden-gitops/platform/crossplane/`; this folder 
 | `base/functions/` | `function-go-templating` v0.13.1, `function-auto-ready` v0.7.2 |
 | `overlays/local/` | `database-default` composes a CloudNativePG `Cluster` and `<name>-conn` Secret |
 | `overlays/azure/` | `database-default` composes a Flexible Server, database, egress firewall rule and `<name>-conn` Secret |
-| `overlays/azure/providers.yaml` | Pinned Azure provider packages and ProviderConfig; credentials are injected from `~/.warden/env` at bootstrap |
+| `overlays/azure/providers.yaml` | Pinned Azure provider packages; the ProviderConfig is bootstrap-generated with AKS managed identity |
 
 Crossplane needs RBAC to manage CNPG `Cluster` objects (v2 composes arbitrary resources); the local overlay supplies
 that ClusterRole. The Azure overlay supplies a separate role for the Flexible Server, database and firewall-rule
