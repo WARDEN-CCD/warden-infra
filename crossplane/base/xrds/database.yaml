@@ -40,6 +40,7 @@ spec:
                 network:
                   type: object
                   description: Network access for the managed Azure backend; the local backend ignores this field.
+                  required: [allowedSourceIp]
                   properties:
                     allowedSourceIp:
                       type: string
