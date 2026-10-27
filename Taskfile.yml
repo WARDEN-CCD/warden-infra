@@ -105,7 +105,7 @@ tasks:
       - ../.venv/Scripts/python.exe scripts/bootstrap_crossplane_config.py apply
 
   down:azure:
-    desc: Destroy everything in envs/azure (cluster, resource group, budget, CI identity); state storage stays
+    desc: Destroy the cluster, resource group, budget, CI and Crossplane role assignments; state storage stays
     vars: *azure_vars
     preconditions: *azure_preconditions
     cmds:
