@@ -1,8 +1,7 @@
 # Local tasks run end to end on kind (S2, E1–E8); the azure tasks have created and destroyed AKS (see the hub's evidence/azure).
 version: '3'
 
-# Machine settings, never committed (hub CONTRIBUTING "Local setup"). Azure tasks read TF_VAR_state_passphrase,
-# TF_VAR_subscription_id and TF_VAR_contact_emails from here.
+# Machine settings, never committed. Azure tasks read credentials and settings from ~/.warden/env.
 dotenv: ['{{.USERPROFILE}}/.warden/env', '{{.HOME}}/.warden/env']
 
 vars:
@@ -18,7 +17,7 @@ tasks:
       - python scripts/ledger.py start local
       - defer: python scripts/ledger.py finish local {{.EXIT_CODE | default "0"}}
       - kind create cluster --config kind/warden.yaml --wait 180s
-      - python scripts/bootstrap_secrets.py local
+      - ../.venv/Scripts/python.exe scripts/bootstrap_secrets.py local
       # Same release name and values Argo CD later uses to manage itself (warden-gitops platform ApplicationSet).
       - >-
         helm upgrade --install argocd argo-cd
@@ -26,7 +25,7 @@ tasks:
         --namespace argocd --create-namespace
         -f {{.GITOPS}}/platform/argocd/values.yaml --wait --timeout 10m
       - kubectl apply -f {{.GITOPS}}/bootstrap/root-local.yaml
-      # root + 9 platform charts + 7 config apps (+ one per service in apps/)
+      # root + 9 platform charts + 8 config apps (+ one per service in apps/)
       - python scripts/wait_for_apps.py --min-apps 17 --timeout 1800
 
   measure:
@@ -62,6 +61,11 @@ tasks:
         > "{{.WARDEN_DIR}}/backend.hcl"
       - echo "wrote {{.WARDEN_DIR}}/backend.hcl"
 
+  bootstrap:crossplane-config:
+    desc: Save non-secret Azure account IDs and configure the AKS managed identity for Crossplane
+    cmds:
+      - ../.venv/Scripts/python.exe scripts/bootstrap_crossplane_config.py env
+
   up:azure:
     desc: Create AKS with OpenTofu, install Argo CD, apply the azure root app; append to the rebuild ledger
     vars: &azure_vars
@@ -80,6 +84,7 @@ tasks:
       - sh: test -f "{{.WARDEN_DIR}}/backend.hcl"
         msg: "Run task bootstrap:azure once first."
     cmds:
+      - ../.venv/Scripts/python.exe scripts/bootstrap_crossplane_config.py env
       - python scripts/ledger.py start azure
       - defer: python scripts/ledger.py finish azure {{.EXIT_CODE | default "0"}}
       - tofu -chdir=tofu/envs/azure init -input=false -backend-config="{{.WARDEN_DIR}}/backend.hcl"
@@ -87,18 +92,20 @@ tasks:
       # Local accounts are disabled: the kubeconfig carries an Entra exec plugin, never a static credential.
       - az aks get-credentials -g warden -n warden --overwrite-existing
       - kubelogin convert-kubeconfig -l azurecli
-      - python scripts/bootstrap_secrets.py azure
+      - ../.venv/Scripts/python.exe scripts/bootstrap_secrets.py azure
       - >-
         helm upgrade --install argocd argo-cd
         --repo https://argoproj.github.io/argo-helm --version {{.ARGOCD_CHART_VERSION}}
         --namespace argocd --create-namespace
         -f {{.GITOPS}}/platform/argocd/values.yaml --wait --timeout 10m
       - kubectl apply -f {{.GITOPS}}/bootstrap/root-azure.yaml
-      # root + 8 platform charts (AKS ships metrics-server) + 7 config apps (+ one per service in apps/)
+      # root + 8 platform charts (AKS ships metrics-server) + 8 config apps (+ one per service in apps/)
       - python scripts/wait_for_apps.py --min-apps 16 --timeout 2400
+      # ProviderConfig is cluster-specific and uses AKS managed identity; it is generated after the CRD is installed.
+      - ../.venv/Scripts/python.exe scripts/bootstrap_crossplane_config.py apply
 
   down:azure:
-    desc: Destroy everything in envs/azure (cluster, resource group, budget, CI identity); state storage stays
+    desc: Destroy the cluster, resource group, budget, CI and Crossplane role assignments; state storage stays
     vars: *azure_vars
     preconditions: *azure_preconditions
     cmds:

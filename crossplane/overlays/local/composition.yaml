@@ -1,4 +1,5 @@
-# Database -> CloudNativePG Cluster in the XR's own namespace (ADR-016). Default composition on kind.
+# Database -> CloudNativePG Cluster in the XR's own namespace (ADR-016). The local cluster's
+# database-default Composition is CloudNativePG; AKS installs a provider-backed implementation with the same name.
 # PostgreSQL images are pinned by digest; the admission VAP allows exactly this registry path
 # for CNPG-managed pods (warden-policy, THREAT_MODEL T06 carve-out).
 # Connection details: the composition owns Secret <name>-conn (host, port, dbname, username, password, uri), the
@@ -7,7 +8,7 @@
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: database-cnpg
+  name: database-default
   labels:
     warden.dev/backend: cnpg
 spec:

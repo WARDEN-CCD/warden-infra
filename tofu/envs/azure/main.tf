@@ -53,6 +53,60 @@ resource "azurerm_resource_group" "warden" {
   tags     = local.tags
 }
 
+# Crossplane can manage only Flexible Server resources inside the ephemeral Warden resource group.
+resource "azurerm_role_definition" "crossplane_postgresql" {
+  name        = "warden-crossplane-postgresql-${substr(var.subscription_id, -8, 8)}"
+  scope       = "/subscriptions/${var.subscription_id}"
+  description = "Manage Azure Database for PostgreSQL Flexible Server resources in the Warden resource group."
+
+  permissions {
+    actions = [
+      "Microsoft.DBforPostgreSQL/flexibleServers/read",
+      "Microsoft.DBforPostgreSQL/flexibleServers/write",
+      "Microsoft.DBforPostgreSQL/flexibleServers/delete",
+      "Microsoft.DBforPostgreSQL/flexibleServers/databases/read",
+      "Microsoft.DBforPostgreSQL/flexibleServers/databases/write",
+      "Microsoft.DBforPostgreSQL/flexibleServers/databases/delete",
+      "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/read",
+      "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/write",
+      "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/delete",
+      "Microsoft.Resources/subscriptions/resourceGroups/read",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = ["/subscriptions/${var.subscription_id}"]
+}
+
+resource "azurerm_role_definition" "crossplane_postgresql_capabilities" {
+  name        = "warden-crossplane-postgresql-capabilities-${substr(var.subscription_id, -8, 8)}"
+  scope       = "/subscriptions/${var.subscription_id}"
+  description = "Read Azure PostgreSQL location capabilities required by the Warden Crossplane provider."
+
+  permissions {
+    actions     = ["Microsoft.DBforPostgreSQL/locations/capabilities/read"]
+    not_actions = []
+  }
+
+  assignable_scopes = ["/subscriptions/${var.subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "crossplane_postgresql" {
+  scope                            = azurerm_resource_group.warden.id
+  role_definition_id               = azurerm_role_definition.crossplane_postgresql.role_definition_resource_id
+  principal_id                     = module.aks.kubelet_identity_object_id
+  principal_type                   = "ServicePrincipal"
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "crossplane_postgresql_capabilities" {
+  scope                            = "/subscriptions/${var.subscription_id}"
+  role_definition_id               = azurerm_role_definition.crossplane_postgresql_capabilities.role_definition_resource_id
+  principal_id                     = module.aks.kubelet_identity_object_id
+  principal_type                   = "ServicePrincipal"
+  skip_service_principal_aad_check = true
+}
+
 locals {
   tags = { project = "warden", ephemeral = "true", managed-by = "opentofu" }
 }
