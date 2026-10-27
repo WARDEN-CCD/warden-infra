@@ -1,0 +1,11 @@
+# Crossplane v2 composes arbitrary resources, but needs explicit RBAC for managed resource kinds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane-compose-azure-postgresql
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  - apiGroups: ["dbforpostgresql.azure.m.upbound.io"]
+    resources: ["flexibleservers", "flexibleserverdatabases", "flexibleserverfirewallrules"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

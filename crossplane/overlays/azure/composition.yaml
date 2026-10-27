@@ -1,0 +1,121 @@
+# Database -> Azure Database for PostgreSQL Flexible Server (ADR-016). Public access is restricted
+# to one explicit AKS egress address; the local composition ignores the same network field.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: database-default
+  labels:
+    warden.dev/backend: azure-flexible-server
+spec:
+  compositeTypeRef:
+    apiVersion: platform.warden.dev/v1alpha1
+    kind: Database
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $name := $xr.metadata.name }}
+            {{- $namespace := $xr.metadata.namespace }}
+            {{- $size := $xr.spec.size | default "small" }}
+            {{- $version := $xr.spec.version | default "18" }}
+            {{- $namespacePart := $namespace | lower | trunc 10 | trimSuffix "-" }}
+            {{- $namePart := $name | lower | trunc 10 | trimSuffix "-" }}
+            {{- $uidSuffix := $xr.metadata.uid | replace "-" "" }}
+            {{- $serverName := printf "wdb-%s-%s-%s" $namespacePart $namePart $uidSuffix }}
+            {{- $host := printf "%s.postgres.database.azure.com" $serverName }}
+            {{- $network := default dict $xr.spec.network }}
+            {{- $sourceIP := required "spec.network.allowedSourceIp must be the AKS egress IPv4 address" $network.allowedSourceIp }}
+            {{- $observed := dig "resources" "conn" "resource" "data" "password" "" .observed }}
+            {{- $password := randAlphaNum 32 }}
+            {{- if $observed }}{{ $password = b64dec $observed }}{{ end }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $name }}-conn
+              namespace: {{ $namespace }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: conn
+            type: Opaque
+            data:
+              username: {{ b64enc "wardenadmin" }}
+              password: {{ b64enc $password }}
+              host: {{ b64enc $host }}
+              port: {{ b64enc "5432" }}
+              dbname: {{ b64enc "app" }}
+              uri: {{ printf "postgresql://wardenadmin:%s@%s:5432/app" $password $host | b64enc }}
+            ---
+            apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+            kind: FlexibleServer
+            metadata:
+              name: {{ $serverName }}
+              namespace: {{ $namespace }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: server
+            spec:
+              deletionPolicy: Delete
+              forProvider:
+                administratorLogin: wardenadmin
+                administratorPasswordSecretRef:
+                  name: {{ $name }}-conn
+                  key: password
+                backupRetentionDays: 7
+                location: indiasouthcentral
+                publicNetworkAccessEnabled: true
+                resourceGroupName: warden
+                skuName: {{ if eq $size "medium" }}B_Standard_B2s{{ else }}B_Standard_B1ms{{ end }}
+                storageMb: {{ if eq $size "medium" }}65536{{ else }}32768{{ end }}
+                version: {{ $version | quote }}
+              providerConfigRef:
+                name: default
+            ---
+            apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+            kind: FlexibleServerDatabase
+            metadata:
+              name: {{ $serverName }}-app
+              namespace: {{ $namespace }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: database
+            spec:
+              deletionPolicy: Delete
+              forProvider:
+                charset: UTF8
+                collation: en_US.utf8
+                serverIdRef:
+                  name: {{ $serverName }}
+              providerConfigRef:
+                name: default
+            ---
+            apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+            kind: FlexibleServerFirewallRule
+            metadata:
+              name: {{ $serverName }}-aks-egress
+              namespace: {{ $namespace }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: firewall
+            spec:
+              deletionPolicy: Delete
+              forProvider:
+                endIpAddress: {{ $sourceIP | quote }}
+                serverIdRef:
+                  name: {{ $serverName }}
+                startIpAddress: {{ $sourceIP | quote }}
+              providerConfigRef:
+                name: default
+            ---
+            apiVersion: platform.warden.dev/v1alpha1
+            kind: Database
+            status:
+              endpoint: {{ $host }}
+              connectionSecret: {{ $name }}-conn
+    - step: automatically-detect-readiness
+      functionRef:
+        name: function-auto-ready

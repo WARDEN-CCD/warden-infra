@@ -1,6 +1,7 @@
-# Encodes ADR-016. Exercised on kind with the database-cnpg composition (2026-10-24).
+# Encodes ADR-016. The same XR schema is served on kind and AKS; each cluster installs its own
+# implementation of the database-default Composition.
 # Developer-facing Database API. Identical on every cluster; the backend is chosen by the cluster overlay,
-# which patches defaultCompositionRef (database-cnpg on local, database-azure on azure).
+# which supplies a different database-default Composition (CloudNativePG locally, Azure Flexible Server on AKS).
 # Crossplane v2: namespaced XR, no claims. status.connectionSecret names the Secret with host, port, dbname,
 # username, password and uri: always <name>-conn, whatever the backend.
 apiVersion: apiextensions.crossplane.io/v2
@@ -14,7 +15,7 @@ spec:
     kind: Database
     plural: databases
   defaultCompositionRef:
-    name: database-cnpg
+    name: database-default
   versions:
     - name: v1alpha1
       served: true
@@ -36,6 +37,15 @@ spec:
                   description: PostgreSQL major version
                   enum: ["17", "18"]
                   default: "18"                  # CloudNativePG 1.30's default major
+                network:
+                  type: object
+                  description: Network access for the managed Azure backend; the local backend ignores this field.
+                  properties:
+                    allowedSourceIp:
+                      type: string
+                      description: Single IPv4 egress address allowed by the Azure PostgreSQL firewall.
+                      pattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'
+                  required: [allowedSourceIp]
             status:
               type: object
               properties:
