@@ -4,11 +4,16 @@ Crossplane v2.4 installs from `warden-gitops/platform/crossplane/`; this folder 
 
 | Path | Content |
 |------|---------|
-| `xrds/database.yaml` | `Database` (`platform.warden.dev/v1alpha1`, namespaced) — the developer contract |
-| `compositions/database-cnpg.yaml` | composes a CloudNativePG `Cluster` + `<name>-conn` Secret (local default) |
-| `compositions/database-azure.yaml` | composes `FlexibleServer`, `FlexibleServerDatabase`, firewall rule + `<name>-conn` Secret (azure default) |
-| `functions/` | `function-go-templating` v0.13.1, `function-auto-ready` v0.7.2 (fully qualified package refs) |
-| `providers/` | `provider-upjet-azure` (crossplane-contrib) PostgreSQL family member v2.8.0, `DeploymentRuntimeConfig` |
+| `base/xrds/database.yaml` | `Database` (`platform.warden.dev/v1alpha1`, namespaced) — the shared developer contract |
+| `base/functions/` | `function-go-templating` v0.13.1, `function-auto-ready` v0.7.2 |
+| `overlays/local/` | `database-default` composes a CloudNativePG `Cluster` and `<name>-conn` Secret |
+| `overlays/azure/` | `database-default` composes a Flexible Server, database, egress firewall rule and `<name>-conn` Secret |
+| `overlays/azure/providers.yaml` | Pinned Azure provider packages and ProviderConfig; credentials are injected from `~/.warden/env` at bootstrap |
 
-Crossplane needs RBAC to manage CNPG `Cluster` objects (v2 composes arbitrary resources) — add a ClusterRole
-with the `rbac.crossplane.io/aggregate-to-crossplane: "true"` label.
+Crossplane needs RBAC to manage CNPG `Cluster` objects (v2 composes arbitrary resources); the local overlay supplies
+that ClusterRole. The Azure overlay supplies a separate role for the Flexible Server, database and firewall-rule
+managed resources. Azure Flexible Server firewall access is restricted to the AKS egress IPv4 address supplied in
+`spec.network.allowedSourceIp`; kind ignores this optional field. For Azure, retrieve the current address after AKS
+creation with `az aks show -g warden -n warden --query 'networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id' -o tsv`
+and `az network public-ip show --ids <id> --query ipAddress -o tsv`. Reuse the same `Database` manifest after setting
+that value; the field has no effect on the local backend.

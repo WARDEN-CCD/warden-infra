@@ -12,9 +12,9 @@ tofu/
   modules/github-oidc/    Entra app + federated credential for this repo's `azure` environment (no secrets)
   envs/azure/             composition of the modules for indiasouthcentral
 crossplane/
-  xrds/                   Database XRD (developer API)
-  compositions/           database-cnpg (pipeline mode, function-go-templating); database-azure is designed, not written
-  functions/ providers/   Function and Provider packages, pinned
+  base/                   shared Database XRD and pinned Composition functions
+  overlays/local/         CloudNativePG default Composition and its RBAC
+  overlays/azure/         PostgreSQL Flexible Server provider, ProviderConfig and Composition
 scripts/ledger.py         appends each up/rebuild to the hub's evidence/rebuilds/rebuild-ledger.csv
 Taskfile.yml              up/down/rebuild for local and azure
 ```
@@ -25,6 +25,7 @@ Taskfile.yml              up/down/rebuild for local and azure
 task up:local        # kind + Argo CD + root app; ledger row appended
 task down:local
 task rebuild:local   # timed destroy + create (evaluation E6)
+task bootstrap:crossplane-identity # once, creates a PostgreSQL-only provider identity in ~/.warden/env
 task up:azure        # about 20 min from an empty subscription; ALWAYS follow with task down:azure
 task down:azure
 ```
@@ -44,9 +45,11 @@ task down:azure
 
 ## Rules
 
-- Nothing outside this repo and `warden-gitops` may be needed to rebuild an environment, except the GitHub App
-  keys in `~/.warden/`.
+- Rebuilding Azure also needs the Crossplane service-principal credential in `~/.warden/env` and GitHub App keys in
+  `~/.warden/`; none of these credentials belong in Git.
 - Azure auth from CI is OIDC only. Never create a client secret.
+- Crossplane's Azure provider credentials are out-of-band in `~/.warden/env`, injected into AKS as a Kubernetes Secret by the bootstrap task;
+  its Azure role is restricted to PostgreSQL Flexible Server resources in the ephemeral `warden` resource group.
 - Allowed regions on the student subscriptions: `indiasouthcentral` (default), `koreacentral`, `eastasia`,
   `uaenorth`, `indonesiacentral`. B-series quota 4 vCPU.
 - AKS clusters are ephemeral. The reaper workflow destroys anything older than 8 hours.
