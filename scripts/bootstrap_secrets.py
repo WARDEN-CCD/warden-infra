@@ -12,6 +12,7 @@
 Stdlib only. Secrets are sent on stdin, never as a command-line argument.
 """
 
+import base64
 import json
 import os
 import secrets
@@ -98,7 +99,7 @@ def crossplane_credentials(cluster: str) -> bool:
     if cluster != "azure":
         return True
     env = warden_env()
-    keys = ("WARDEN_CROSSPLANE_CLIENT_ID", "WARDEN_CROSSPLANE_CLIENT_SECRET", "WARDEN_CROSSPLANE_TENANT_ID")
+    keys = ("WARDEN_CROSSPLANE_CLIENT_ID", "WARDEN_CROSSPLANE_CLIENT_SECRET_B64", "WARDEN_CROSSPLANE_TENANT_ID")
     if not all(env.get(key) for key in keys):
         print("bootstrap_secrets: Azure Crossplane credentials missing; run task bootstrap:crossplane-identity")
         return False
@@ -109,7 +110,10 @@ def crossplane_credentials(cluster: str) -> bool:
     ensure_namespace("crossplane-system")
     credentials = {
         "clientId": env["WARDEN_CROSSPLANE_CLIENT_ID"],
-        "clientSecret": env["WARDEN_CROSSPLANE_CLIENT_SECRET"],
+        "clientSecret": base64.urlsafe_b64decode(
+            env["WARDEN_CROSSPLANE_CLIENT_SECRET_B64"]
+            + "=" * (-len(env["WARDEN_CROSSPLANE_CLIENT_SECRET_B64"]) % 4)
+        ).decode(),
         "tenantId": env["WARDEN_CROSSPLANE_TENANT_ID"],
         "subscriptionId": subscription,
         "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
