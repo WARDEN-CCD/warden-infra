@@ -12,7 +12,6 @@
 Stdlib only. Secrets are sent on stdin, never as a command-line argument.
 """
 
-import base64
 import json
 import os
 import secrets
@@ -95,42 +94,10 @@ def notifications_secret(cluster: str) -> bool:
     return ok
 
 
-def crossplane_credentials(cluster: str) -> bool:
-    if cluster != "azure":
-        return True
-    env = warden_env()
-    keys = ("WARDEN_CROSSPLANE_CLIENT_ID", "WARDEN_CROSSPLANE_CLIENT_SECRET_B64", "WARDEN_CROSSPLANE_TENANT_ID")
-    if not all(env.get(key) for key in keys):
-        print("bootstrap_secrets: Azure Crossplane credentials missing; run task bootstrap:crossplane-identity")
-        return False
-    subscription = env.get("TF_VAR_subscription_id") or os.environ.get("TF_VAR_subscription_id")
-    if not subscription:
-        print("bootstrap_secrets: TF_VAR_subscription_id missing from ~/.warden/env")
-        return False
-    ensure_namespace("crossplane-system")
-    credentials = {
-        "clientId": env["WARDEN_CROSSPLANE_CLIENT_ID"],
-        "clientSecret": base64.urlsafe_b64decode(
-            env["WARDEN_CROSSPLANE_CLIENT_SECRET_B64"]
-            + "=" * (-len(env["WARDEN_CROSSPLANE_CLIENT_SECRET_B64"]) % 4)
-        ).decode(),
-        "tenantId": env["WARDEN_CROSSPLANE_TENANT_ID"],
-        "subscriptionId": subscription,
-        "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
-        "resourceManagerEndpointUrl": "https://management.azure.com/",
-        "activeDirectoryGraphResourceId": "https://graph.windows.net/",
-        "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
-        "galleryEndpointUrl": "https://gallery.azure.com/",
-        "managementEndpointUrl": "https://management.core.windows.net/",
-    }
-    return apply_secret("crossplane-system", "azure-creds", {"creds": json.dumps(credentials)})
-
-
 def main() -> int:
     cluster = sys.argv[1] if len(sys.argv) > 1 else "local"
     ok = grafana_admin(cluster)
     ok = notifications_secret(cluster) and ok
-    ok = crossplane_credentials(cluster) and ok
     return 0 if ok else 1
 
 

@@ -25,7 +25,7 @@ Taskfile.yml              up/down/rebuild for local and azure
 task up:local        # kind + Argo CD + root app; ledger row appended
 task down:local
 task rebuild:local   # timed destroy + create (evaluation E6)
-task bootstrap:crossplane-identity # once, creates a PostgreSQL-only provider identity in ~/.warden/env
+task bootstrap:crossplane-config # once, saves non-secret Azure account IDs for ProviderConfig bootstrap
 task up:azure        # about 20 min from an empty subscription; ALWAYS follow with task down:azure
 task down:azure
 ```
@@ -45,11 +45,12 @@ task down:azure
 
 ## Rules
 
-- Rebuilding Azure also needs the Crossplane service-principal credential in `~/.warden/env` and GitHub App keys in
-  `~/.warden/`; none of these credentials belong in Git.
+- Rebuilding Azure uses the AKS kubelet managed identity for the Crossplane PostgreSQL provider. No long-lived
+  provider credential is stored; subscription and tenant IDs live in `~/.warden/env`.
 - Azure auth from CI is OIDC only. Never create a client secret.
-- Crossplane's Azure provider credentials are out-of-band in `~/.warden/env`, injected into AKS as a Kubernetes Secret by the bootstrap task;
-  its Azure role is restricted to PostgreSQL Flexible Server resources in the ephemeral `warden` resource group.
+- Crossplane uses the AKS kubelet managed identity. OpenTofu grants it a PostgreSQL-only role on the ephemeral
+  `warden` resource group and read access to PostgreSQL region capabilities. The ProviderConfig is created by the
+  bootstrap task after the provider CRD is installed.
 - Allowed regions on the student subscriptions: `indiasouthcentral` (default), `koreacentral`, `eastasia`,
   `uaenorth`, `indonesiacentral`. B-series quota 4 vCPU.
 - AKS clusters are ephemeral. The reaper workflow destroys anything older than 8 hours.
