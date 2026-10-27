@@ -1,4 +1,4 @@
-"""Create bootstrap-only secrets that must never live in Git (hub DESIGN §14, CLAUDE.md rule 8).
+"""Create bootstrap-only secrets that must never live in Git (hub DESIGN §14).
 
   python scripts/bootstrap_secrets.py <cluster-name>
 
