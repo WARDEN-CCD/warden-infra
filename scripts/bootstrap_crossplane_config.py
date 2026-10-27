@@ -53,7 +53,10 @@ def kubectl(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess
 def save_account() -> dict[str, str]:
     account = run_az("account", "show", "--output", "json")
     values = read_env()
-    values.setdefault("TF_VAR_subscription_id", os.environ.get("TF_VAR_subscription_id", account["id"]))
+    configured_subscription = os.environ.get("TF_VAR_subscription_id") or values.get("TF_VAR_subscription_id")
+    if configured_subscription and configured_subscription.lower() != account["id"].lower():
+        raise RuntimeError("active Azure subscription does not match TF_VAR_subscription_id in ~/.warden/env")
+    values["TF_VAR_subscription_id"] = account["id"]
     values["TF_VAR_tenant_id"] = account["tenantId"]
     WARDEN.mkdir(parents=True, exist_ok=True)
     ENV_FILE.write_text("\n".join(f"{key}={value}" for key, value in values.items()) + "\n",
@@ -67,19 +70,25 @@ def apply_provider_config() -> None:
     subscription, tenant = values.get("TF_VAR_subscription_id"), values.get("TF_VAR_tenant_id")
     if not subscription or not tenant:
         raise RuntimeError("Azure subscription or tenant ID missing; run task bootstrap:crossplane-config first")
+    aks = run_az("aks", "show", "--resource-group", "warden", "--name", "warden", "--output", "json")
+    try:
+        kubelet_client_id = aks["identityProfile"]["kubeletidentity"]["clientId"]
+    except KeyError as exc:
+        raise RuntimeError("AKS kubelet managed identity client ID is unavailable") from exc
     for _ in range(60):
-        crd = kubectl("get", "crd", "providerconfigs.azure.upbound.io")
+        crd = kubectl("get", "crd", "clusterproviderconfigs.azure.m.upbound.io")
         if crd.returncode == 0:
             break
         time.sleep(10)
     else:
-        raise RuntimeError("Azure ProviderConfig CRD did not become available after provider installation")
+        raise RuntimeError("Azure ClusterProviderConfig CRD did not become available after provider installation")
     provider_config = {
-        "apiVersion": "azure.upbound.io/v1beta1",
-        "kind": "ProviderConfig",
+        "apiVersion": "azure.m.upbound.io/v1beta1",
+        "kind": "ClusterProviderConfig",
         "metadata": {"name": "default"},
         "spec": {
-            "credentials": {"source": "SystemAssignedManagedIdentity"},
+            "credentials": {"source": "UserAssignedManagedIdentity"},
+            "clientID": kubelet_client_id,
             "subscriptionID": subscription,
             "tenantID": tenant,
         },
@@ -87,7 +96,7 @@ def apply_provider_config() -> None:
     result = kubectl("apply", "-f", "-", stdin=json.dumps(provider_config))
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "ProviderConfig apply failed")
-    print("bootstrap_crossplane_config: applied ProviderConfig using the AKS managed identity")
+    print("bootstrap_crossplane_config: applied ClusterProviderConfig using the AKS kubelet managed identity")
 
 
 def main() -> int:

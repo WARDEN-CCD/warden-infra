@@ -26,7 +26,10 @@ spec:
             {{- $namespace := $xr.metadata.namespace }}
             {{- $size := $xr.spec.size | default "small" }}
             {{- $version := $xr.spec.version | default "18" }}
-            {{- $serverName := printf "wdb-%s-%s" $namespace $name | lower | trunc 63 | trimSuffix "-" }}
+            {{- $namespacePart := $namespace | lower | trunc 10 | trimSuffix "-" }}
+            {{- $namePart := $name | lower | trunc 10 | trimSuffix "-" }}
+            {{- $uidSuffix := $xr.metadata.uid | replace "-" "" }}
+            {{- $serverName := printf "wdb-%s-%s-%s" $namespacePart $namePart $uidSuffix }}
             {{- $host := printf "%s.postgres.database.azure.com" $serverName }}
             {{- $network := default dict $xr.spec.network }}
             {{- $sourceIP := required "spec.network.allowedSourceIp must be the AKS egress IPv4 address" $network.allowedSourceIp }}
@@ -63,7 +66,6 @@ spec:
                 administratorLogin: wardenadmin
                 administratorPasswordSecretRef:
                   name: {{ $name }}-conn
-                  namespace: {{ $namespace }}
                   key: password
                 backupRetentionDays: 7
                 location: indiasouthcentral
