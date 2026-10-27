@@ -32,7 +32,8 @@ spec:
             {{- $serverName := printf "wdb-%s-%s-%s" $namespacePart $namePart $uidSuffix }}
             {{- $host := printf "%s.postgres.database.azure.com" $serverName }}
             {{- $network := default dict $xr.spec.network }}
-            {{- $sourceIP := required "spec.network.allowedSourceIp must be the AKS egress IPv4 address" $network.allowedSourceIp }}
+            {{- if empty $network.allowedSourceIp }}{{ fail "spec.network.allowedSourceIp must be the AKS egress IPv4 address" }}{{ end }}
+            {{- $sourceIP := $network.allowedSourceIp }}
             {{- $observed := dig "resources" "conn" "resource" "data" "password" "" .observed }}
             {{- $password := randAlphaNum 32 }}
             {{- if $observed }}{{ $password = b64dec $observed }}{{ end }}
@@ -61,7 +62,7 @@ spec:
               annotations:
                 gotemplating.fn.crossplane.io/composition-resource-name: server
             spec:
-              deletionPolicy: Delete
+              managementPolicies: ["*"]
               forProvider:
                 administratorLogin: wardenadmin
                 administratorPasswordSecretRef:
@@ -76,6 +77,7 @@ spec:
                 version: {{ $version | quote }}
               providerConfigRef:
                 name: default
+                kind: ClusterProviderConfig
             ---
             apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
             kind: FlexibleServerDatabase
@@ -84,8 +86,9 @@ spec:
               namespace: {{ $namespace }}
               annotations:
                 gotemplating.fn.crossplane.io/composition-resource-name: database
+                crossplane.io/external-name: app
             spec:
-              deletionPolicy: Delete
+              managementPolicies: ["*"]
               forProvider:
                 charset: UTF8
                 collation: en_US.utf8
@@ -93,6 +96,7 @@ spec:
                   name: {{ $serverName }}
               providerConfigRef:
                 name: default
+                kind: ClusterProviderConfig
             ---
             apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
             kind: FlexibleServerFirewallRule
@@ -102,7 +106,7 @@ spec:
               annotations:
                 gotemplating.fn.crossplane.io/composition-resource-name: firewall
             spec:
-              deletionPolicy: Delete
+              managementPolicies: ["*"]
               forProvider:
                 endIpAddress: {{ $sourceIP | quote }}
                 serverIdRef:
@@ -110,6 +114,7 @@ spec:
                 startIpAddress: {{ $sourceIP | quote }}
               providerConfigRef:
                 name: default
+                kind: ClusterProviderConfig
             ---
             apiVersion: platform.warden.dev/v1alpha1
             kind: Database
