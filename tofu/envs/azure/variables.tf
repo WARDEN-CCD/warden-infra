@@ -69,3 +69,9 @@ variable "create_ci_identity" {
   default     = false
   description = "Create the Entra app + federated credential for warden-infra's `azure` environment."
 }
+
+variable "crossplane_object_id" {
+  type        = string
+  description = "Object ID of the dedicated Crossplane service principal; assigned only PostgreSQL permissions on the warden resource group."
+  default     = null
+}
